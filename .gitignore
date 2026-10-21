@@ -1,0 +1,17 @@
+# Python
+venv/
+__pycache__/
+.pytest_cache/
+
+# Session recordings (raw body landmarks of whoever was in front of the camera)
+logs/
+
+# Songs for --music (copyrighted)
+music/
+
+# MediaPipe models (download them, see README)
+config/*.task
+
+# Editor
+*.code-workspace
+commands.txt
