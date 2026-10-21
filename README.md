@@ -57,8 +57,8 @@ angle, and every session can be recorded to CSV to analyse detection and filteri
 ## Setup
 
 ```bash
-git clone https://github.com/dasanplaen-cmyk/Yanshee-Teleoperation.git
-cd Yanshee-Teleoperation
+git clone https://github.com/dasanplaen-cmyk/Yanshee.git
+cd ~/Yanshee
 
 python3 -m venv venv && source venv/bin/activate
 pip install mediapipe opencv-python numpy requests nest_asyncio "protobuf==3.20.3" pytest

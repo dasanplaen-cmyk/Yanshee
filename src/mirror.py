@@ -85,8 +85,8 @@ class LatestFrame(threading.Thread):
             return None
         if isinstance(self.source, int):
             fourcc = int(cap.get(cv2.CAP_PROP_FOURCC)).to_bytes(4, "little").decode(errors="ignore")
-            print(f"[camera {self.source}] {fourcc} {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
-                  f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))} at {cap.get(cv2.CAP_PROP_FPS):.0f} fps")
+            print(f"[cámara {self.source}] {fourcc} {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
+                  f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))} a {cap.get(cv2.CAP_PROP_FPS):.0f} fps")
         return cap
 
     def run(self):
@@ -287,7 +287,7 @@ def main():
     def add_mark(origin):
         if log:
             log.mark += 1
-            print(f"[log] mark {log.mark} ({origin})")
+            print(f"[log] marca {log.mark} ({origin})")
 
     cam = LatestFrame(source, tuple(int(v) for v in args.res.lower().split("x")) if args.res else C.LOCAL_CAMERA_SIZE)
     cam.start()
@@ -299,12 +299,12 @@ def main():
     mirror = C.MIRROR and not args.no_mirror
     # Only the person's arms that drive an active servo must hold the home pose
     active_sides = driving_sides(C.ARM_SERVOS, mirror)
-    print("Person's arm(s) driving the robot: " +
-          ", ".join({"left": "LEFT", "right": "RIGHT"}[s] for s in sorted(active_sides)))
+    print("Brazo(s) de la persona que controlan el robot: " +
+          ", ".join({"left": "IZQUIERDO", "right": "DERECHO"}[s] for s in sorted(active_sides)))
 
-    # States: DISARMED --arm--> SYNC: robot at home, waiting for the person to hold the same pose
-    # --> ARMED: the robot copies how far the person moves away from their home.
-    # Disarm or person lost: DISARMED and robot to home. q: quit and robot to rest.
+    # States: DESARMADO (disarmed) --arm--> SYNC: robot at home, waiting for the person to hold the
+    # same pose --> ARMADO (armed): the robot copies how far the person moves away from their home.
+    # Disarm or person lost: DESARMADO and robot to home. q: quit and robot to rest.
     sync = HomeSync(C.HOME_HOLD_S, C.HOME_TOL_DEG)
     reference = default_reference()  # until synced, a theoretical perfect T-pose
     prev_human = {}  # previous frame's angles, for arm_angles' branch hysteresis
@@ -312,7 +312,7 @@ def main():
     depth = DepthSign()  # robust upper arm/forearm depth sign (median + hysteresis)
     ui = Dashboard(C.ARM_SERVOS, C.CALIB, height=C.UI_HEIGHT) if args.vis else None
     cv2.namedWindow("Yanshee mirror", cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # resizable
-    state, first_move = "DISARMED", False
+    state, first_move = "DESARMADO", False
     last_seen = time.monotonic()
     last_stamp = 0.0
     trigger = GestureTrigger(C.GESTURE_HOLD_S)
@@ -320,30 +320,28 @@ def main():
 
     def disarm():
         nonlocal state
-        state = "DISARMED"
+        state = "DESARMADO"
         sender.clear()
         smoother.reset()
         robot.home(home_angles, C.HOME_RUNTIME_MS)
 
     console = ConsoleKeys()
     console.start()
-    print(f"Gestures (hold {C.GESTURE_HOLD_S:.0f} s): thumb up = arm (SYNC), thumb down = disarm, "
-          f"middle finger = quit, victory = next song (--music).\n"
-          f"Keys (window or terminal): {ARM_KEY} = arm/disarm, {MARK_KEY} = mark in the log (--log), "
-          f"{NEXT_SONG_KEY} = next song (--music), {QUIT_KEY} = quit")
+    print(f"Gestos ({C.GESTURE_HOLD_S:.0f} s): pulgar arriba = armar (SYNC), pulgar abajo = desarmar, "
+          f"dedo corazón = marca en el log (con --log).\n"
+          f"Teclas (ventana o terminal): {ARM_KEY} = armar/desarmar, {MARK_KEY} = marca en el log, {QUIT_KEY} = salir")
     try:
         # Without a window, waitKey gets no keys: until the first frame arrives there is no way to
         # quit with q, so wait with a time limit and exit with a clear error.
-        print(f"Waiting for video from {source} ...")
+        print(f"Esperando vídeo de {source} ...")
         deadline = time.monotonic() + C.CAMERA_TIMEOUT_S
         while cam.get()[0] is None:
             if time.monotonic() > deadline:
-                hint = ("Is the camera connected? (check the index with ls /dev/video*)" if isinstance(source, int)
-                        else "Is the robot on and on the same network?")
-                print(f"[error] no video after {C.CAMERA_TIMEOUT_S:.0f} s from {source}. {hint}")
+                print(f"[error] sin vídeo tras {C.CAMERA_TIMEOUT_S:.0f} s desde {source}. "
+                      "¿Está el robot encendido y en la misma red?")
                 return
             time.sleep(0.1)
-        timer_music = time.monotonic()  # last time the music state was checked
+        timer_music = time.time()
         pending_key = ""
         while True:
             frame, stamp = cam.get()
@@ -372,11 +370,11 @@ def main():
             fired = trigger.update(gesture, now)
 
             if args.music and not args.dry_run:
-                # Every MUSIC_CHECK_S: if the robot is no longer playing, start the next song
-                if now - timer_music >= C.MUSIC_CHECK_S:
-                    timer_music = now
-                    if robot.api.get_media_music_state()['data']['status'] != 'run':
+                if int(now - timer_music) % 5 == 0:
+                    status = robot.api.get_media_music_state()['data']['status'] == 'run'
+                    if not status:
                         robot.play_song()
+                    timer_music = time.time()
     
             status = state
             visible = False
@@ -405,13 +403,13 @@ def main():
                             reference = {**reference, **ref}
                             arm_lengths.update({s: r["lengths"] for s, r in ref.items() if "lengths" in r})
                             prev_human = {}  # from now on the arms are measured rebuilt
-                            state, first_move = "ARMED", True
+                            state, first_move = "ARMADO", True
                             smoother.reset()
-                            print("ARMED. Person's home reference: " + ", ".join(
-                                f"{side} abd={r['abduction']:.0f} elbow={r['elbow']:.0f}" for side, r in ref.items()))
+                            print("ARMADO. Referencia home de la persona: " + ", ".join(
+                                f"{side} abd={r['abduction']:.0f} codo={r['elbow']:.0f}" for side, r in ref.items()))
                     targets = human_to_robot(human, C.CALIB, mirror, reference, C.ARM_SERVOS)
                     smoothed = smoother.smooth(targets, now)
-                    if state == "ARMED":
+                    if state == "ARMADO":
                         current = robot.get_angles(C.ARM_SERVOS) if first_move else {}
                         cmd = smoother.next_command(smoothed, current)
                         sender.submit(cmd, C.FIRST_MOVE_RUNTIME_MS if first_move else C.RUNTIME_MS)
@@ -421,8 +419,8 @@ def main():
                     if state == "SYNC":
                         # err = max(home_error(human[s]) for s in active_sides)
                         err = max(home_error(human[s]) for s in active_sides)
-                        status = (f"SYNC: stand in a T-pose with straight elbows. "
-                                  f"Deviation {err:.0f}/{C.HOME_TOL_DEG:.0f}, {sync.progress(now) * 100:.0f}%")
+                        status = (f"SYNC: ponte en cruz con los codos rectos. "
+                                  f"Desviacion {err:.0f}/{C.HOME_TOL_DEG:.0f}, {sync.progress(now) * 100:.0f}%")
                     
             if log:
                 lms = res.pose_landmarks[0] if res.pose_landmarks else None
@@ -435,22 +433,22 @@ def main():
                     sync.reset()  # the home pose must be held continuously and fully visible
 
             # Watchdog: if the person is lost, disarm and send the robot home
-            if state == "ARMED" and now - last_seen > C.LOST_TIMEOUT_S:
-                print("[safety] person lost: disarmed and robot to home")
+            if state == "ARMADO" and now - last_seen > C.LOST_TIMEOUT_S:
+                print("[seguridad] persona perdida: desarmado y robot a home")
                 disarm()
 
             draw_hands(frame, gesture_res, gestures)
             if not visible:
-                status = f"{state}: person not fully visible (shoulders, elbows and wrists)"
-            notes = [f"Gestures: left {gestures['Left']} / right {gestures['Right']}"]
+                status = f"{state}: no se ve a la persona entera (hombros, codos y munecas)"
+            notes = [f"Gestos: izq {gestures['Left']} / der {gestures['Right']}"]
             if trigger.progress(now) > 0:
-                notes.append(f"Holding {trigger.gesture}: {trigger.progress(now) * 100:.0f}%")
+                notes.append(f"Manteniendo {trigger.gesture}: {trigger.progress(now) * 100:.0f}%")
             if log:
-                notes.append(f"REC  {os.path.basename(args.log)}  (marks: {log.mark})")
+                notes.append(f"REC  {os.path.basename(args.log)}  (marcas: {log.mark})")
             if ui:  # --vis: video + angle panel
                 ui.add(now - t_start, smoothed)
                 cv2.imshow("Yanshee mirror", ui.render(frame, state, status, smoothed,
-                                                       smoother.sent if state == "ARMED" else {}, notes))
+                                                       smoother.sent if state == "ARMADO" else {}, notes))
             else:   # video only, with the state on top
                 cv2.imshow("Yanshee mirror", overlay(frame, state, status, notes[1:]))
             key = pending_key or read_key(console)  # each key is read only once and used here
@@ -459,22 +457,22 @@ def main():
                 break
             if args.music and not args.dry_run and (key == NEXT_SONG_KEY or fired == NEXT_SONG_GESTURE):
                 robot.play_song()
-                timer_music = time.monotonic()
+                timer_music = time.time()
             if key == MARK_KEY:
-                add_mark("key")
+                add_mark("tecla")
             # if fired == QUIT_GESTURE:
-            #     add_mark("gesture")
-            arm_request = fired == ARM_GESTURE or (key == ARM_KEY and state == "DISARMED")
-            disarm_request = fired == DISARM_GESTURE or (key == ARM_KEY and state != "DISARMED")
-            if arm_request and state == "DISARMED":
+            #     add_mark("gesto")
+            arm_request = fired == ARM_GESTURE or (key == ARM_KEY and state == "DESARMADO")
+            disarm_request = fired == DISARM_GESTURE or (key == ARM_KEY and state != "DESARMADO")
+            if arm_request and state == "DESARMADO":
                 state = "SYNC"
                 sync.reset()
                 arm_lengths.clear()  # measured again in the new T-pose
                 robot.home(home_angles, C.HOME_RUNTIME_MS)
-                print("SYNC: robot at home; stand in a T-pose with straight elbows")
-            elif disarm_request and state != "DISARMED":
+                print("SYNC: robot en home; ponte en cruz con los codos rectos")
+            elif disarm_request and state != "DESARMADO":
                 disarm()
-                print("DISARMED")
+                print("DESARMADO")
 
     except KeyboardInterrupt:
         pass  # Ctrl+C: clean exit, the finally block sends the robot to rest
@@ -490,13 +488,13 @@ def main():
 
         if log:
             log.close()
-            print(f"[log] session saved to {args.log}")
+            print(f"[log] sesión guardada en {args.log}")
 
         for step in ([robot.rest] + ([robot.close_stream] if args.source is None else [])):
             try:
                 step()
             except Exception as e:
-                print(f"[robot] {step.__name__} failed on exit: {e}")
+                print(f"[robot] {step.__name__} falló al salir: {e}")
         # Close them here: if they close on their own when Python exits, MediaPipe prints __del__ errors
         landmarker.close()
         gesture_model.close()
