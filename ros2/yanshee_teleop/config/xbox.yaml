@@ -1,0 +1,35 @@
+# Xbox controller (Linux xpad layout): buttons A=0 B=1 X=2 Y=3 LB=4 RB=5 Back=6 Start=7,
+# axes LX=0 LY=1 LT=2 RX=3 RY=4 RT=5 DpadX=6 DpadY=7.
+joy_node:
+  ros__parameters:
+    deadzone: 0.1
+    autorepeat_rate: 20.0     # keep publishing while the stick is held
+
+teleop_twist_joy_node:        # same as /opt/ros/humble/.../xbox.config.yaml, with corrected comments
+  ros__parameters:
+    axis_linear:              # left stick vertical -> forwards/backwards
+      x: 1
+    scale_linear:
+      x: 0.7
+    scale_linear_turbo:
+      x: 1.5
+    axis_angular:             # left stick horizontal -> sidestep on the Yanshee (see driver.py)
+      yaw: 0
+    scale_angular:
+      yaw: 0.4
+    enable_button: 2          # X: hold it to walk (dead man's switch)
+    enable_turbo_button: 5    # RB: hold instead of X for the turbo scale
+
+yanshee_driver:
+  ros__parameters:
+    robot_ip: "192.168.1.62"
+    dry_run: false
+    linear_full_scale: 0.7    # = scale_linear.x: full stick -> speed 5 (turbo saturates at 5 too)
+    angular_full_scale: 0.4   # = scale_angular.yaw
+    max_speed: 5              # gait API range is [-5, 5]; lower it for the first tests
+    invert_v: false           # flip if pushing the stick forwards walks backwards
+    invert_h: false           # flip if the sidestep goes the wrong way
+    gait_period: 1
+    cmd_timeout: 0.5          # no /cmd_vel for this long (e.g. controller lost) -> stop walking
+    rate_hz: 5.0
+    motion_speed: "normal"    # very slow, slow, normal, fast, very fast

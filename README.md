@@ -140,6 +140,40 @@ python src/upload_music.py --ip 192.168.1.62
 
 The volume is `ROBOT_VOL` in `config.py`. `music/` is not part of the repo.
 
+## Xbox controller (ROS 2)
+
+`ros2/yanshee_teleop` drives the robot's walking gait and built-in motions with an Xbox controller,
+on ROS 2 Humble:
+
+```
+joy_node --/joy--> teleop_twist_joy --/cmd_vel--> yanshee_driver --HTTP--> Yanshee
+   \--------------------/joy (buttons)--------------------^
+```
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --base-paths ros2 --symlink-install     # from the repo root
+source install/setup.bash
+ros2 launch yanshee_teleop teleop.launch.py robot_ip:=192.168.1.62 dry_run:=true   # test first
+ros2 launch yanshee_teleop teleop.launch.py robot_ip:=192.168.1.62
+```
+
+| Control | Action |
+|---|---|
+| Hold **X** + left stick | Walk: vertical = forwards/backwards, horizontal = sidestep |
+| Hold **RB** + left stick | Same, turbo scale |
+| **A** / **B** / **Y** | Wave / bow / raise arms (only while standing still) |
+| D-pad left / right | Turn (built-in "turn around" motion) |
+| **Back** | Emergency stop: gait off, motions stopped, rest pose. Walking stays blocked until the stick is released |
+| **Start** | Rest pose |
+
+Releasing X (or losing the controller for `cmd_timeout`, 0.5 s) stops walking. The gait API takes
+integer speeds in [-5, 5] and has no turn rate, so the stick's horizontal axis becomes a sidestep.
+All parameters (robot IP, speed scaling, `max_speed`, `invert_v`/`invert_h`, ...) are in
+`ros2/yanshee_teleop/config/xbox.yaml`. The driver finds `YanAPI.py` through the `yanshee_root`
+parameter (default: `$YANSHEE_ROOT` or `~/Yanshee`) and loads it with the pure-Python protobuf
+implementation, because `lib_ukit` does not load with the system's protobuf 5.
+
 ## How it works
 
 ### Arm angles (`retarget.py`)
@@ -239,6 +273,7 @@ filters and sender with synthetic poses; `test_gestures.py` covers gesture parsi
 | `src/test_*.py` | Tests |
 | `config/` | MediaPipe `.task` models (downloaded, see Setup; not in the repo) |
 | `YanAPI.py`, `lib_ukit/` | UBTECH SDK, copied from the robot |
+| `ros2/yanshee_teleop/` | ROS 2 package: Xbox controller -> walking and motions |
 | `logs/`, `music/` | Local session recordings and songs (not in the repo) |
 
 ## Measured behaviour and known limitations

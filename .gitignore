@@ -15,3 +15,8 @@ config/*.task
 # Editor
 *.code-workspace
 commands.txt
+
+# colcon (ros2/ packages built from the repo root)
+/build/
+/install/
+/log/

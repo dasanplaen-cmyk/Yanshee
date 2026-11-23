@@ -42,7 +42,7 @@ GESTURE_HOLD_S = 1.0               # a gesture must be held this long to trigger
 # with it every frame took over 33 ms, so with a 30 fps camera only every other frame was processed.
 GESTURE_EVERY_N_FRAMES = 3
 
-ROBOT_VOL = 15
+ROBOT_VOL = 100
 MUSIC_CHECK_S = 5.0                 # --music: how often to check whether the robot is still playing
 
 # Home sync (arms in a T-pose, elbows straight): when arming, the robot goes to home and waits for
